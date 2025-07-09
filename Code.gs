@@ -8,7 +8,7 @@
 // 1. SCRIPT_URL: The URL of this script when deployed as a web app.
 // 2. Script Properties must be set before deployment using setProperties().
 
-//let's try something new! shall e try
+//let's try something new! shall e try.
 
 const BUDGET_LIMIT = 20; // Budget threshold for direct API call vs. approval.
 const ADMIN_EMAIL = 'usmansafderktk@gmail.com';
