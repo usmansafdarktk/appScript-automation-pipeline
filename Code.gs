@@ -1,6 +1,7 @@
 // ========== Code.gs ==========
 // This script handles Google Form submissions, direct API calls for budgets <= $20,
 // and manager approval for budgets > $20, integrating with an AWS API Gateway.
+// Requires: ApprovalEmail.html for email template
 
 // --- SCRIPT PROPERTIES ---
 // Set in Project Settings > Script Properties:
@@ -54,7 +55,7 @@ function onFormSubmit(e) {
 
     if (!managerEmail) {
       Logger.log("ERROR: 'Manager's Email' field missing. Cannot proceed.");
-      MailApp.sendEmail('admin.email@example.com', 'CRITICAL Error', "Manager's Email not provided in form response.");
+      MailApp.sendEmail('usmansafderktk@gmail.com', 'CRITICAL Error', "Manager's Email not provided in form response.");
       return;
     }
 
@@ -94,7 +95,7 @@ function onFormSubmit(e) {
       } catch (apiError) {
         Logger.log(`Error calling API: ${apiError}`);
         MailApp.sendEmail(
-          'admin.email@example.com',
+          'usmansafderktk@gmail.com',
           'API Trigger Failed',
           `Failed to trigger API for ${email}'s request.\n\nError: ${apiError}`
         );
@@ -106,7 +107,7 @@ function onFormSubmit(e) {
   } catch (error) {
     Logger.log(`FATAL Error in onFormSubmit: ${error}\nStack: ${error.stack}`);
     MailApp.sendEmail(
-      'admin.email@example.com',
+      'usmansafderktk@gmail.com',
       'CRITICAL Error in Budget Approval Script',
       `An error occurred: ${error}\n\nStack: ${error.stack}`
     );
@@ -121,7 +122,7 @@ function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
   if (!scriptUrl) {
     Logger.log('FATAL ERROR: SCRIPT_URL not set in Script Properties.');
     MailApp.sendEmail(
-      'admin.email@example.com',
+      'usmansafderktk@gmail.com',
       'CRITICAL SCRIPT ERROR',
       'SCRIPT_URL property not set. Approval workflow broken.'
     );
@@ -134,7 +135,7 @@ function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
 
   // Store request data in cache
   const cache = CacheService.getScriptCache();
-  const requestData = JSON.stringify({ submitterEmail, budget, module });
+  DO NOT SHARE SENSITIVE INFORMATION IN PUBLIC CHATS, PLEASE REDACT AND RESEND IF NECESSARY const requestData = JSON.stringify({ submitterEmail, budget, module });
   cache.put(approvalToken, requestData, 21600); // Store for 6 hours
   cache.put(denialToken, requestData, 21600);   // Store for 6 hours
 
@@ -208,7 +209,7 @@ function doGet(e) {
     } catch (apiError) {
       Logger.log(`Error calling API: ${apiError}`);
       MailApp.sendEmail(
-        'admin.email@example.com',
+        'usmansafderktk@gmail.com',
         'API Trigger Failed',
         `Failed to trigger API for ${submitterEmail}'s request.\n\nError: ${apiError}`
       );
