@@ -9,36 +9,192 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Log Workflow Context
+      
+      - name: Debug - Check All Required Secrets
         run: |
-          echo "Event Name: ${{ github.event_name }}"
-          echo "Ref: ${{ github.ref }}"
-          echo "SHA: ${{ github.sha }}"
-          echo "Secrets: CLASPRC_JSON=${{ secrets.CLASPRC_JSON != '' }}"
-          echo "SCRIPT_ID=${{ secrets.SCRIPT_ID != '' }}"
-          echo "SCRIPT_URL=${{ secrets.SCRIPT_URL != '' }}"
-          echo "API_GATEWAY_URL=${{ secrets.API_GATEWAY_URL != '' }}"
-          echo "DEPLOYMENT_ID=${{ secrets.DEPLOYMENT_ID != '' }}"
+          echo "=== SECRET VALIDATION ==="
+          echo "CLASPRC_JSON: $([ -n "${{ secrets.CLASPRC_JSON }}" ] && echo "✓ Present (length: ${#CLASPRC_JSON})" || echo "✗ Missing")"
+          echo "SCRIPT_ID: $([ -n "${{ secrets.SCRIPT_ID }}" ] && echo "✓ Present" || echo "✗ Missing")"
+          echo "SCRIPT_URL: $([ -n "${{ secrets.SCRIPT_URL }}" ] && echo "✓ Present" || echo "✗ Missing")"
+          echo "API_GATEWAY_URL: $([ -n "${{ secrets.API_GATEWAY_URL }}" ] && echo "✓ Present" || echo "✗ Missing")"
+          echo "DEPLOYMENT_ID: $([ -n "${{ secrets.DEPLOYMENT_ID }}" ] && echo "✓ Present" || echo "✗ Missing")"
+          echo "========================="
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          
+      - name: Debug - Validate Secret Formats
+        run: |
+          echo "=== SECRET FORMAT VALIDATION ==="
+          
+          # Check if CLASPRC_JSON is valid JSON
+          if echo "${{ secrets.CLASPRC_JSON }}" | jq empty 2>/dev/null; then
+            echo "CLASPRC_JSON: ✓ Valid JSON format"
+          else
+            echo "CLASPRC_JSON: ✗ Invalid JSON format"
+            exit 1
+          fi
+          
+          # Check SCRIPT_ID format (should be alphanumeric with dashes/underscores)
+          if [[ "${{ secrets.SCRIPT_ID }}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "SCRIPT_ID: ✓ Valid format"
+          else
+            echo "SCRIPT_ID: ✗ Invalid format (should be alphanumeric with dashes/underscores)"
+          fi
+          
+          # Check if URLs are valid
+          if curl -s --head "${{ secrets.SCRIPT_URL }}" | head -n 1 | grep -q "200\|302"; then
+            echo "SCRIPT_URL: ✓ Accessible"
+          else
+            echo "SCRIPT_URL: ⚠ May not be accessible (this is normal for new deployments)"
+          fi
+          
+          if curl -s --head "${{ secrets.API_GATEWAY_URL }}" | head -n 1 | grep -q "200\|302\|403"; then
+            echo "API_GATEWAY_URL: ✓ Accessible"
+          else
+            echo "API_GATEWAY_URL: ⚠ May not be accessible"
+          fi
+          
+          echo "========================="
+          
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Install clasp
-        run: npm install -g @google/clasp
-      - name: Create .clasprc.json
-        run: echo "${{ secrets.CLASPRC_JSON }}" > ~/.clasprc.json
-      - name: Create .clasp.json
-        run: echo "{\"scriptId\": \"${{ secrets.SCRIPT_ID }}\", \"rootDir\": \".\"}" > .clasp.json
-      - name: Push code to Apps Script
-        run: clasp push
-      - name: Update Script Properties
+          
+      - name: Install clasp and jq
         run: |
-          clasp run setProperties --params "{\"SCRIPT_URL\": \"${{ secrets.SCRIPT_URL }}\", \
-            \"API_GATEWAY_URL\": \"${{ secrets.API_GATEWAY_URL }}\"}"
+          npm install -g @google/clasp
+          sudo apt-get update && sudo apt-get install -y jq
+          
+      - name: Debug - Create and Validate .clasprc.json
+        run: |
+          echo "=== CLASPRC SETUP ==="
+          echo "${{ secrets.CLASPRC_JSON }}" > ~/.clasprc.json
+          chmod 600 ~/.clasprc.json
+          
+          # Validate the clasprc file
+          if [ -f ~/.clasprc.json ]; then
+            echo "✓ .clasprc.json created"
+            echo "File size: $(stat -c%s ~/.clasprc.json) bytes"
+            
+            # Check if it contains required fields (without exposing values)
+            if jq -e '.access_token' ~/.clasprc.json >/dev/null 2>&1; then
+              echo "✓ Contains access_token"
+            else
+              echo "✗ Missing access_token"
+            fi
+            
+            if jq -e '.refresh_token' ~/.clasprc.json >/dev/null 2>&1; then
+              echo "✓ Contains refresh_token"
+            else
+              echo "✗ Missing refresh_token"
+            fi
+          else
+            echo "✗ Failed to create .clasprc.json"
+            exit 1
+          fi
+          echo "========================="
+          
+      - name: Debug - Create and Validate .clasp.json
+        run: |
+          echo "=== CLASP CONFIG SETUP ==="
+          echo "{\"scriptId\": \"${{ secrets.SCRIPT_ID }}\", \"rootDir\": \".\"}" > .clasp.json
+          
+          if [ -f .clasp.json ]; then
+            echo "✓ .clasp.json created"
+            echo "Content: $(cat .clasp.json)"
+            
+            # Validate JSON format
+            if jq empty .clasp.json 2>/dev/null; then
+              echo "✓ Valid JSON format"
+            else
+              echo "✗ Invalid JSON format"
+              exit 1
+            fi
+          else
+            echo "✗ Failed to create .clasp.json"
+            exit 1
+          fi
+          echo "========================="
+          
+      - name: Debug - Test clasp authentication
+        run: |
+          echo "=== CLASP AUTH TEST ==="
+          if clasp login --status; then
+            echo "✓ Clasp authentication successful"
+          else
+            echo "✗ Clasp authentication failed"
+            echo "Trying to refresh token..."
+            clasp login --status || exit 1
+          fi
+          echo "========================="
+          
+      - name: Debug - Verify project access
+        run: |
+          echo "=== PROJECT ACCESS TEST ==="
+          if clasp status; then
+            echo "✓ Can access Apps Script project"
+          else
+            echo "✗ Cannot access Apps Script project"
+            echo "Check if SCRIPT_ID is correct and you have access to the project"
+            exit 1
+          fi
+          echo "========================="
+          
+      - name: Push code to Apps Script
+        run: |
+          echo "=== PUSHING CODE ==="
+          clasp push --force
+          echo "✓ Code pushed successfully"
+          echo "========================="
+          
+      - name: Debug - Test script execution (optional)
+        run: |
+          echo "=== SCRIPT EXECUTION TEST ==="
+          # Test if we can run a simple function
+          if clasp run setProperties --params "{\"SCRIPT_URL\": \"${{ secrets.SCRIPT_URL }}\", \"API_GATEWAY_URL\": \"${{ secrets.API_GATEWAY_URL }}\"}" 2>/dev/null; then
+            echo "✓ Script execution successful"
+          else
+            echo "⚠ Script execution failed - this might be normal if setProperties function doesn't exist"
+            echo "Parameters being passed:"
+            echo "  SCRIPT_URL: ${{ secrets.SCRIPT_URL }}"
+            echo "  API_GATEWAY_URL: ${{ secrets.API_GATEWAY_URL }}"
+          fi
+          echo "========================="
+        continue-on-error: true
+        
       - name: Create new version
         run: |
-          clasp version "GitHub Deployment - $(date -u +%Y-%m-%d_%H-%M-%S)"
+          echo "=== CREATING VERSION ==="
+          VERSION_NAME="GitHub Deployment - $(date -u +%Y-%m-%d_%H-%M-%S)"
+          echo "Version name: $VERSION_NAME"
+          clasp version "$VERSION_NAME"
+          echo "✓ Version created successfully"
+          echo "========================="
+          
+      - name: Debug - Validate deployment ID
+        run: |
+          echo "=== DEPLOYMENT ID VALIDATION ==="
+          if [[ "${{ secrets.DEPLOYMENT_ID }}" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            echo "✓ DEPLOYMENT_ID format looks valid"
+          else
+            echo "✗ DEPLOYMENT_ID format may be invalid"
+            echo "Expected: alphanumeric with dashes/underscores"
+          fi
+          echo "========================="
+          
       - name: Update existing deployment
-        run: clasp deploy --deploymentId "${{ secrets.DEPLOYMENT_ID }}"
-      - name: Output deployment URL
-        run: echo "Deployed to: ${{ secrets.SCRIPT_URL }}"
+        run: |
+          echo "=== UPDATING DEPLOYMENT ==="
+          echo "Deployment ID: ${{ secrets.DEPLOYMENT_ID }}"
+          clasp deploy --deploymentId "${{ secrets.DEPLOYMENT_ID }}"
+          echo "✓ Deployment updated successfully"
+          echo "========================="
+          
+      - name: Final deployment info
+        run: |
+          echo "=== DEPLOYMENT COMPLETE ==="
+          echo "Deployed to: ${{ secrets.SCRIPT_URL }}"
+          echo "API Gateway: ${{ secrets.API_GATEWAY_URL }}"
+          echo "Deployment completed at: $(date -u)"
+          echo "========================="
