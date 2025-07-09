@@ -135,7 +135,7 @@ function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
 
   // Store request data in cache
   const cache = CacheService.getScriptCache();
-  DO NOT SHARE SENSITIVE INFORMATION IN PUBLIC CHATS, PLEASE REDACT AND RESEND IF NECESSARY const requestData = JSON.stringify({ submitterEmail, budget, module });
+  const requestData = JSON.stringify({ submitterEmail, budget, module });
   cache.put(approvalToken, requestData, 21600); // Store for 6 hours
   cache.put(denialToken, requestData, 21600);   // Store for 6 hours
 
