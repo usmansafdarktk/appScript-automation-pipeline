@@ -29,6 +29,15 @@ jobs:
           # Check if CLASPRC_JSON is valid JSON
           if echo "${{ secrets.CLASPRC_JSON }}" | jq empty 2>/dev/null; then
             echo "CLASPRC_JSON: ✓ Valid JSON format"
+            
+            # Check which format it uses
+            if echo "${{ secrets.CLASPRC_JSON }}" | jq -e '.tokens.default' >/dev/null 2>&1; then
+              echo "CLASPRC_JSON: ✓ Using new format (tokens.default)"
+            elif echo "${{ secrets.CLASPRC_JSON }}" | jq -e '.token' >/dev/null 2>&1; then
+              echo "CLASPRC_JSON: ✓ Using old format (token)"
+            else
+              echo "CLASPRC_JSON: ⚠ Unknown format structure"
+            fi
           else
             echo "CLASPRC_JSON: ✗ Invalid JSON format"
             exit 1
@@ -78,16 +87,22 @@ jobs:
             echo "File size: $(stat -c%s ~/.clasprc.json) bytes"
             
             # Check if it contains required fields (without exposing values)
-            if jq -e '.access_token' ~/.clasprc.json >/dev/null 2>&1; then
+            if jq -e '.tokens.default.access_token // .token.access_token' ~/.clasprc.json >/dev/null 2>&1; then
               echo "✓ Contains access_token"
             else
               echo "✗ Missing access_token"
             fi
             
-            if jq -e '.refresh_token' ~/.clasprc.json >/dev/null 2>&1; then
+            if jq -e '.tokens.default.refresh_token // .token.refresh_token' ~/.clasprc.json >/dev/null 2>&1; then
               echo "✓ Contains refresh_token"
             else
               echo "✗ Missing refresh_token"
+            fi
+            
+            if jq -e '.tokens.default.client_id // .oauth2ClientSettings.clientId' ~/.clasprc.json >/dev/null 2>&1; then
+              echo "✓ Contains client_id"
+            else
+              echo "✗ Missing client_id"
             fi
           else
             echo "✗ Failed to create .clasprc.json"
