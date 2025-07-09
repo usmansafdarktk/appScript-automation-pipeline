@@ -1,3 +1,4 @@
+---
 name: Deploy to Google Apps Script
 on:
   push:
@@ -13,7 +14,11 @@ jobs:
           echo "Event Name: ${{ github.event_name }}"
           echo "Ref: ${{ github.ref }}"
           echo "SHA: ${{ github.sha }}"
-          echo "Secrets Available: CLASPRC_JSON=${{ secrets.CLASPRC_JSON != '' }}, SCRIPT_ID=${{ secrets.SCRIPT_ID != '' }}, SCRIPT_URL=${{ secrets.SCRIPT_URL != '' }}, API_GATEWAY_URL=${{ secrets.API_GATEWAY_URL != '' }}, DEPLOYMENT_ID=${{ secrets.DEPLOYMENT_ID != '' }}"
+          echo "Secrets: CLASPRC_JSON=${{ secrets.CLASPRC_JSON != '' }}"
+          echo "SCRIPT_ID=${{ secrets.SCRIPT_ID != '' }}"
+          echo "SCRIPT_URL=${{ secrets.SCRIPT_URL != '' }}"
+          echo "API_GATEWAY_URL=${{ secrets.API_GATEWAY_URL != '' }}"
+          echo "DEPLOYMENT_ID=${{ secrets.DEPLOYMENT_ID != '' }}"
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -23,13 +28,16 @@ jobs:
       - name: Create .clasprc.json
         run: echo "${{ secrets.CLASPRC_JSON }}" > ~/.clasprc.json
       - name: Create .clasp.json
-        run: printf '{"scriptId": "%s", "rootDir": "."}' "${{ secrets.SCRIPT_ID }}" > .clasp.json
+        run: echo "{\"scriptId\": \"${{ secrets.SCRIPT_ID }}\", \"rootDir\": \".\"}" > .clasp.json
       - name: Push code to Apps Script
         run: clasp push
       - name: Update Script Properties
-        run: clasp run setProperties --params '{"SCRIPT_URL": "${{ secrets.SCRIPT_URL }}", "API_GATEWAY_URL": "${{ secrets.API_GATEWAY_URL }}"}'
+        run: |
+          clasp run setProperties --params "{\"SCRIPT_URL\": \"${{ secrets.SCRIPT_URL }}\", \
+            \"API_GATEWAY_URL\": \"${{ secrets.API_GATEWAY_URL }}\"}"
       - name: Create new version
-        run: clasp version "Automated deployment from GitHub - $(date -u +%Y-%m-%d_%H-%M-%S)"
+        run: |
+          clasp version "GitHub Deployment - $(date -u +%Y-%m-%d_%H-%M-%S)"
       - name: Update existing deployment
         run: clasp deploy --deploymentId "${{ secrets.DEPLOYMENT_ID }}"
       - name: Output deployment URL
