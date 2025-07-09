@@ -24,10 +24,7 @@ jobs:
         run: clasp push
       - name: Update Script Properties
         run: |
-          clasp run 'setProperties' --params '[{
-            "SCRIPT_URL": "${{ secrets.SCRIPT_URL }}",
-            "API_GATEWAY_URL": "${{ secrets.API_GATEWAY_URL }}"
-          }]'
+          clasp run setProperties --params "{\"SCRIPT_URL\": \"${{ secrets.SCRIPT_URL }}\", \"API_GATEWAY_URL\": \"${{ secrets.API_GATEWAY_URL }}\"}"
       - name: Create new version
         run: clasp version "Automated deployment from GitHub - $(date -u +%Y-%m-%d_%H-%M-%S)"
       - name: Update existing deployment
