@@ -6,10 +6,10 @@
 // --- SCRIPT PROPERTIES ---
 // Set in Project Settings > Script Properties:
 // 1. SCRIPT_URL: The URL of this script when deployed as a web app.
-// 2. API_GATEWAY_URL: The API Gateway URL.
+// 2. Script Properties must be set before deployment using setProperties().
 
 const BUDGET_LIMIT = 20; // Budget threshold for direct API call vs. approval.
-const API_GATEWAY_URL = PropertiesService.getScriptProperties().getProperty('API_GATEWAY_URL');
+const ADMIN_EMAIL = 'usmansafderktk@gmail.com';
 
 /**
  * Triggered on form submission.
@@ -17,7 +17,7 @@ const API_GATEWAY_URL = PropertiesService.getScriptProperties().getProperty('API
  */
 function onFormSubmit(e) {
   try {
-    Logger.log('Function triggered. Fetching latest form submission.');
+    Logger.log('onFormSubmit triggered. Fetching latest form submission.');
 
     // --- Fetch Latest Form Response ---
     const form = FormApp.getActiveForm();
@@ -26,6 +26,7 @@ function onFormSubmit(e) {
 
     if (!latestResponse) {
       Logger.log('ERROR: No form responses found.');
+      MailApp.sendEmail(ADMIN_EMAIL, 'CRITICAL Error', 'No form responses found.');
       return;
     }
 
@@ -40,10 +41,11 @@ function onFormSubmit(e) {
     const submitterEmail = latestResponse.getRespondentEmail();
     if (!submitterEmail) {
       Logger.log('ERROR: Respondent email not found. Ensure "Collect email addresses" is enabled.');
+      MailApp.sendEmail(ADMIN_EMAIL, 'CRITICAL Error', 'Respondent email not found. Ensure "Collect email addresses" is enabled.');
       return;
     }
 
-    Logger.log(`Manually fetched data: ${JSON.stringify(namedValues, null, 2)}`);
+    Logger.log(`Fetched data: ${JSON.stringify(namedValues, null, 2)}`);
     Logger.log(`Submitter Email: ${submitterEmail}`);
 
     // --- Extract Form Data ---
@@ -54,8 +56,8 @@ function onFormSubmit(e) {
     const managerEmail = formResponse["Manager's Email"] ? formResponse["Manager's Email"][0] : null;
 
     if (!managerEmail) {
-      Logger.log("ERROR: 'Manager's Email' field missing. Cannot proceed.");
-      MailApp.sendEmail('usmansafderktk@gmail.com', 'CRITICAL Error', "Manager's Email not provided in form response.");
+      Logger.log("ERROR: 'Manager's Email' field missing.");
+      MailApp.sendEmail(ADMIN_EMAIL, 'CRITICAL Error', "Manager's Email not provided in form response.");
       return;
     }
 
@@ -63,15 +65,9 @@ function onFormSubmit(e) {
 
     // --- Business Logic ---
     if (budget <= BUDGET_LIMIT) {
-      Logger.log(`Budget of ${budget} is <= ${BUDGET_LIMIT}. Calling API Gateway directly.`);
+      Logger.log(`Budget of ${budget} is <= ${BUDGET_LIMIT}. Calling API directly.`);
 
-      // Prepare API payload
-      const payload = {
-        email: email,
-        budget: budget.toString(),
-        module: module
-      };
-
+      const payload = { email, budget: budget.toString(), module };
       Logger.log(`API Payload: ${JSON.stringify(payload)}`);
 
       const options = {
@@ -82,20 +78,29 @@ function onFormSubmit(e) {
       };
 
       try {
-        const response = UrlFetchApp.fetch(API_GATEWAY_URL, options);
-        Logger.log(`API Response Code: ${response.getResponseCode()}`);
+        const apiGatewayUrl = PropertiesService.getScriptProperties().getProperty('API_GATEWAY_URL');
+        if (!apiGatewayUrl) {
+          throw new Error('API_GATEWAY_URL not set in Script Properties.');
+        }
+        const response = UrlFetchApp.fetch(apiGatewayUrl, options);
+        const responseCode = response.getResponseCode();
+        Logger.log(`API Response Code: ${responseCode}`);
         Logger.log(`API Response Body: ${response.getContentText()}`);
 
-        // Notify submitter of automatic approval
-        MailApp.sendEmail(
-          email,
-          'Budget Request Auto-Approved',
-          `Hello,\n\nYour budget request of $${budget} for module ${module} has been auto-approved as it is within the $${BUDGET_LIMIT} limit.`
-        );
+        if (responseCode === 200) {
+          MailApp.sendEmail(
+            email,
+            'Budget Request Auto-Approved',
+            `Hello,\n\nYour budget request of $${budget} for module ${module} has been auto-approved as it is within the $${BUDGET_LIMIT} limit.`
+          );
+          Logger.log(`Auto-approval email sent to ${email}`);
+        } else {
+          throw new Error(`API call failed with status ${responseCode}: ${response.getContentText()}`);
+        }
       } catch (apiError) {
         Logger.log(`Error calling API: ${apiError}`);
         MailApp.sendEmail(
-          'usmansafderktk@gmail.com',
+          ADMIN_EMAIL,
           'API Trigger Failed',
           `Failed to trigger API for ${email}'s request.\n\nError: ${apiError}`
         );
@@ -107,7 +112,7 @@ function onFormSubmit(e) {
   } catch (error) {
     Logger.log(`FATAL Error in onFormSubmit: ${error}\nStack: ${error.stack}`);
     MailApp.sendEmail(
-      'usmansafderktk@gmail.com',
+      ADMIN_EMAIL,
       'CRITICAL Error in Budget Approval Script',
       `An error occurred: ${error}\n\nStack: ${error.stack}`
     );
@@ -122,24 +127,23 @@ function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
   if (!scriptUrl) {
     Logger.log('FATAL ERROR: SCRIPT_URL not set in Script Properties.');
     MailApp.sendEmail(
-      'usmansafderktk@gmail.com',
+      ADMIN_EMAIL,
       'CRITICAL SCRIPT ERROR',
       'SCRIPT_URL property not set. Approval workflow broken.'
     );
     return;
   }
 
-  // Create unique tokens for approval/denial
   const approvalToken = `approve-${Utilities.getUuid()}`;
   const denialToken = `deny-${Utilities.getUuid()}`;
 
-  // Store request data in cache
   const cache = CacheService.getScriptCache();
   const requestData = JSON.stringify({ submitterEmail, budget, module });
-  cache.put(approvalToken, requestData, 21600); // Store for 6 hours
-  cache.put(denialToken, requestData, 21600);   // Store for 6 hours
+  cache.put(approvalToken, requestData, 21600);
+  cache.put(denialToken, requestData, 21600);
+  Logger.log(`Stored approval token: ${approvalToken}, Data: ${requestData}`);
+  Logger.log(`Stored denial token: ${denialToken}, Data: ${requestData}`);
 
-  // Prepare data for HTML template
   const templateData = {
     submitter: submitterEmail,
     budget: budget.toFixed(2),
@@ -148,92 +152,108 @@ function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
     denialUrl: `${scriptUrl}?token=${denialToken}`
   };
 
-  const htmlTemplate = HtmlService.createTemplateFromFile('ApprovalEmail');
-  htmlTemplate.data = templateData;
-  const htmlBody = htmlTemplate.evaluate().getContent();
+  try {
+    const htmlTemplate = HtmlService.createTemplateFromFile('ApprovalEmail');
+    htmlTemplate.data = templateData;
+    const htmlBody = htmlTemplate.evaluate().getContent();
 
-  const subject = `Budget Request Approval Needed for ${submitterEmail}`;
-
-  GmailApp.sendEmail(managerEmail, subject, '', {
-    htmlBody: htmlBody,
-    name: 'Automated Budget Approval System'
-  });
-
-  Logger.log(`Approval email sent to ${managerEmail}.`);
+    GmailApp.sendEmail(managerEmail, `Budget Request Approval Needed for ${submitterEmail}`, '', {
+      htmlBody: htmlBody,
+      name: 'Automated Budget Approval System'
+    });
+    Logger.log(`Approval email sent to ${managerEmail}`);
+  } catch (emailError) {
+    Logger.log(`Error sending approval email: ${emailError}`);
+    MailApp.sendEmail(
+      ADMIN_EMAIL,
+      'Email Sending Failed',
+      `Failed to send approval email to ${managerEmail}.\n\nError: ${emailError}`
+    );
+  }
 }
 
 /**
  * Handles web app requests when the manager clicks approval/denial links.
  */
 function doGet(e) {
-  const token = e.parameter.token;
-  const cache = CacheService.getScriptCache();
-  const requestDataJSON = cache.get(token);
+  try {
+    const token = e.parameter.token;
+    if (!token) {
+      Logger.log('ERROR: No token provided in doGet.');
+      return HtmlService.createHtmlOutput('<h1>Invalid Link</h1><p>No token provided.</p>');
+    }
 
-  if (!requestDataJSON) {
-    return HtmlService.createHtmlOutput('<h1>Link Expired</h1><p>This link has expired or has already been used.</p>');
-  }
+    const cache = CacheService.getScriptCache();
+    const requestDataJSON = cache.get(token);
 
-  cache.remove(token); // Prevent reuse
-  const requestData = JSON.parse(requestDataJSON);
-  const { submitterEmail, budget, module } = requestData;
+    if (!requestDataJSON) {
+      Logger.log(`ERROR: Token ${token} not found or expired.`);
+      return HtmlService.createHtmlOutput('<h1>Link Expired</h1><p>This link has expired or has already been used.</p>');
+    }
 
-  if (token.startsWith('approve')) {
-    Logger.log(`Request APPROVED by manager. Submitter: ${submitterEmail}, Budget: ${budget}, Module: ${module}`);
+    cache.remove(token);
+    const requestData = JSON.parse(requestDataJSON);
+    const { submitterEmail, budget, module } = requestData;
 
-    // Trigger API Gateway
-    const payload = {
-      email: submitterEmail,
-      budget: budget.toString(),
-      module: module
-    };
+    if (token.startsWith('approve')) {
+      Logger.log(`Request APPROVED by manager. Submitter: ${submitterEmail}, Budget: ${budget}, Module: ${module}`);
 
-    const options = {
-      method: 'post',
-      contentType: 'application/json',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    };
+      const payload = { email: submitterEmail, budget: budget.toString(), module };
+      const options = {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify(payload),
+        muteHttpExceptions: true
+      };
 
-    try {
-      const response = UrlFetchApp.fetch(API_GATEWAY_URL, options);
-      Logger.log(`API Response Code: ${response.getResponseCode()}`);
+      const apiGatewayUrl = PropertiesService.getScriptProperties().getProperty('API_GATEWAY_URL');
+      if (!apiGatewayUrl) {
+        throw new Error('API_GATEWAY_URL not set in Script Properties.');
+      }
+
+      const response = UrlFetchApp.fetch(apiGatewayUrl, options);
+      const responseCode = response.getResponseCode();
+      Logger.log(`API Response Code: ${responseCode}`);
       Logger.log(`API Response Body: ${response.getContentText()}`);
 
-      // Notify submitter
+      if (responseCode === 200) {
+        MailApp.sendEmail(
+          submitterEmail,
+          'Your Budget Request Was Approved',
+          `Hello,\n\nYour budget request for $${budget} for module ${module} has been approved by your manager.`
+        );
+        Logger.log(`Approval notification sent to ${submitterEmail}`);
+        return HtmlService.createHtmlOutput(
+          '<h1>Request Approved</h1><p>Thank you. The budget request has been approved and processed.</p>'
+        );
+      } else {
+        throw new Error(`API call failed with status ${responseCode}: ${response.getContentText()}`);
+      }
+    } else if (token.startsWith('deny')) {
+      Logger.log(`Request DENIED by manager. Submitter: ${submitterEmail}, Budget: ${budget}, Module: ${module}`);
+
       MailApp.sendEmail(
         submitterEmail,
-        'Your Budget Request Was Approved',
-        `Hello,\n\nYour budget request for $${budget} for module ${module} has been approved by your manager.`
+        'Your Budget Request Was Denied',
+        `Hello,\n\nUnfortunately, your budget request for $${budget} for module ${module} has been denied by your manager.`
       );
-    } catch (apiError) {
-      Logger.log(`Error calling API: ${apiError}`);
-      MailApp.sendEmail(
-        'usmansafderktk@gmail.com',
-        'API Trigger Failed',
-        `Failed to trigger API for ${submitterEmail}'s request.\n\nError: ${apiError}`
+      Logger.log(`Denial notification sent to ${submitterEmail}`);
+      return HtmlService.createHtmlOutput(
+        '<h1>Request Denied</h1><p>Thank you. The budget request has been denied and the submitter notified.</p>'
       );
     }
 
-    return HtmlService.createHtmlOutput(
-      '<h1>Request Approved</h1><p>Thank you. The budget request has been approved and processed.</p>'
-    );
-  } else if (token.startsWith('deny')) {
-    Logger.log(`Request DENIED by manager. Submitter: ${submitterEmail}, Budget: ${budget}, Module: ${module}`);
-
-    // Notify submitter
+    Logger.log(`ERROR: Invalid token prefix for token ${token}`);
+    return HtmlService.createHtmlOutput('<h1>Invalid Link</h1><p>The link you followed is not valid.</p>');
+  } catch (error) {
+    Logger.log(`ERROR in doGet: ${error}\nStack: ${error.stack}`);
     MailApp.sendEmail(
-      submitterEmail,
-      'Your Budget Request Was Denied',
-      `Hello,\n\nUnfortunately, your budget request for $${budget} for module ${module} has been denied by your manager.`
+      ADMIN_EMAIL,
+      'Error in Approval/Denial Processing',
+      `An error occurred in doGet: ${error}\n\nStack: ${error.stack}`
     );
-
-    return HtmlService.createHtmlOutput(
-      '<h1>Request Denied</h1><p>Thank you. The budget request has been denied and the submitter notified.</p>'
-    );
+    return HtmlService.createHtmlOutput('<h1>Error</h1><p>An error occurred while processing your request.</p>');
   }
-
-  return HtmlService.createHtmlOutput('<h1>Invalid Link</h1><p>The link you followed is not valid.</p>');
 }
 
 /**
@@ -242,7 +262,9 @@ function doGet(e) {
 function setProperties(properties) {
   const scriptProperties = PropertiesService.getScriptProperties();
   for (const [key, value] of Object.entries(properties)) {
-    scriptProperties.setProperty(key, value);
+   רת
+
+System: scriptProperties.setProperty(key, value);
   }
   Logger.log('Script Properties updated: ' + JSON.stringify(properties));
 }
@@ -258,9 +280,3 @@ function runTestEmail() {
     'Test Module'
   );
 }
-
-/**
- * let's see if push work
- */
-
-// This non deterministic nature of LLMS and especially their use in code generation is something.
