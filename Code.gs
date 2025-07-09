@@ -3,18 +3,16 @@
 // and manager approval for budgets > $20, integrating with an AWS API Gateway.
 
 // --- SCRIPT PROPERTIES ---
-// Set these in Project Settings > Script Properties:
+// Set in Project Settings > Script Properties:
 // 1. SCRIPT_URL: The URL of this script when deployed as a web app.
-// 2. YOUR_API_ENDPOINT: The API Gateway URL[](https://g8b9gg9qn9.execute-api.ap-southeast-1.amazonaws.com/ProcessFormData).
+// 2. API_GATEWAY_URL: The API Gateway URL.
 
 const BUDGET_LIMIT = 20; // Budget threshold for direct API call vs. approval.
-const API_GATEWAY_URL = 'https://g8b9gg9qn9.execute-api.ap-southeast-1.amazonaws.com/ProcessFormData';
+const API_GATEWAY_URL = PropertiesService.getScriptProperties().getProperty('API_GATEWAY_URL');
 
 /**
  * Triggered on form submission.
  * Fetches the latest form response, processes the budget, and either calls the API directly or sends an approval email.
- *
- * @param {Object} e The event object (ignored for reliability; we fetch the latest response manually).
  */
 function onFormSubmit(e) {
   try {
@@ -117,11 +115,6 @@ function onFormSubmit(e) {
 
 /**
  * Sends an approval email to the manager with links to approve or deny the request.
- *
- * @param {string} managerEmail The manager's email address.
- * @param {string} submitterEmail The submitter's email address.
- * @param {number} budget The requested budget amount.
- * @param {string} module The module associated with the request.
  */
 function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
   const scriptUrl = PropertiesService.getScriptProperties().getProperty('SCRIPT_URL');
@@ -170,9 +163,6 @@ function sendApprovalEmail(managerEmail, submitterEmail, budget, module) {
 
 /**
  * Handles web app requests when the manager clicks approval/denial links.
- *
- * @param {Object} e The web app event object.
- * @returns {HtmlOutput} Confirmation page for the manager.
  */
 function doGet(e) {
   const token = e.parameter.token;
@@ -243,6 +233,17 @@ function doGet(e) {
   }
 
   return HtmlService.createHtmlOutput('<h1>Invalid Link</h1><p>The link you followed is not valid.</p>');
+}
+
+/**
+ * Updates Script Properties with provided key-value pairs.
+ */
+function setProperties(properties) {
+  const scriptProperties = PropertiesService.getScriptProperties();
+  for (const [key, value] of Object.entries(properties)) {
+    scriptProperties.setProperty(key, value);
+  }
+  Logger.log('Script Properties updated: ' + JSON.stringify(properties));
 }
 
 /**
