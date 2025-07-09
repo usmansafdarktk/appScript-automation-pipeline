@@ -1,0 +1,33 @@
+name: Test Clasp Setup
+on:
+  workflow_dispatch:
+  
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install tools
+        run: |
+          npm install -g @google/clasp
+          sudo apt-get update && sudo apt-get install -y jq
+          
+      - name: Test secret format
+        run: |
+          echo "Testing CLASPRC_JSON format..."
+          echo '${{ secrets.CLASPRC_JSON }}' | jq . > /dev/null
+          echo "✅ JSON is valid"
+          
+      - name: Create clasp files
+        run: |
+          echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+          echo '{"scriptId": "${{ secrets.SCRIPT_ID }}", "rootDir": "."}' > .clasp.json
+          
+      - name: Test clasp auth
+        run: |
+          clasp login --status
+          echo "✅ Authentication works"
+          
+      - name: Test project access
+        run: |
+          clasp status
+          echo "✅ Can access project"
