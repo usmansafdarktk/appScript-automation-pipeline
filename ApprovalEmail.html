@@ -1,0 +1,80 @@
+<!-- ========== ApprovalEmail.html ========== -->
+<!-- This is the HTML template for the approval email sent to the manager. -->
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+  </head>
+  <body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f6f8fA;">
+    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+      <tr>
+        <td style="padding: 20px 0;">
+          <table align="center" border="0" cellpadding="0" cellspacing="0" width="600" style="border-collapse: collapse; background-color: #ffffff; border: 1px solid #e1e4e8; border-radius: 6px;">
+            
+            <!-- Header -->
+            <tr>
+              <td align="center" style="background-color: #24292e; padding: 24px; color: #ffffff; border-radius: 6px 6px 0 0;">
+                <h1 style="margin: 0; font-size: 28px;">Budget Approval Required</h1>
+              </td>
+            </tr>
+            
+            <!-- Content -->
+            <tr>
+              <td style="padding: 32px 24px; color: #333333; line-height: 1.6;">
+                <h2 style="margin-top: 0; color: #24292e;">Request Details</h2>
+                <p style="margin: 16px 0; font-size: 16px;">
+                  A new budget request that exceeds the standard limit requires your approval.
+                </p>
+                <table border="0" cellpadding="5" cellspacing="0" style="width: 100%; border-collapse: collapse; background-color: #f6f8fa; border: 1px solid #e1e4e8; margin-bottom: 20px;">
+                  <tr>
+                    <td style="padding: 10px; font-weight: bold; width: 120px;">Submitted By:</td>
+                    <td style="padding: 10px;"><?= data.submitter ?></td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; font-weight: bold;">Amount:</td>
+                    <td style="padding: 10px; font-size: 18px; font-weight: bold; color: #d73a49;">$<?= data.budget ?></td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px; font-weight: bold;">Reason:</td>
+                    <td style="padding: 10px;"><?= data.reason ?></td>
+                  </tr>
+                </table>
+                
+                <p style="font-size: 16px;">Please review the request and choose an action:</p>
+              </td>
+            </tr>
+            
+            <!-- Action Buttons -->
+            <tr>
+              <td style="padding: 0 24px 32px;">
+                <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                  <tr>
+                    <td align="center">
+                      <!-- Approve Button -->
+                      <a href="<?= data.approvalUrl ?>" target="_blank" style="display: inline-block; background-color: #28a745; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 18px; font-weight: bold; margin: 5px;">
+                        Approve
+                      </a>
+                      <!-- Deny Button -->
+                      <a href="<?= data.denialUrl ?>" target="_blank" style="display: inline-block; background-color: #d73a49; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-size: 18px; font-weight: bold; margin: 5px;">
+                        Deny
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            
+            <!-- Footer -->
+            <tr>
+              <td style="background-color: #f6f8fa; padding: 20px 30px; text-align: center; color: #6a737d; font-size: 12px; border-top: 1px solid #e1e4e8; border-radius: 0 0 6px 6px;">
+                <p style="margin: 0;">This is an automated email. Please do not reply directly.</p>
+              </td>
+            </tr>
+            
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
